@@ -1,0 +1,267 @@
+CLASS zcl_sel_pattern_test_console DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_oo_adt_classrun .
+
+    TYPES:
+      BEGIN OF ts_so_head_item,
+        vbeln TYPE vbak-vbeln,
+        posnr TYPE vbap-posnr,
+        matnr TYPE vbap-matnr,
+        netwr TYPE vbap-netwr,
+        waerk TYPE vbap-waerk,
+        mtart TYPE mara-mtart,
+        xchpf TYPE mara-xchpf,
+      END OF ts_so_head_item,
+      tt_so_head_item TYPE STANDARD TABLE OF ts_so_head_item,
+
+      BEGIN OF ts_so_descriptive.
+        INCLUDE TYPE ts_so_head_item.
+    TYPES:
+        IsBatchMgmtReq TYPE text40,
+      END OF ts_so_descriptive,
+      tt_so_descriptive TYPE STANDARD TABLE OF ts_so_descriptive
+    .
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+    CONSTANTS:
+      cv_material_type_hawa TYPE mara-mtart VALUE 'HAWA',
+      cv_sd_order_type_ta   TYPE vbak-auart VALUE 'TA'
+    .
+    DATA:
+      mo_out            TYPE REF TO if_oo_adt_classrun_out,
+      mt_so_head_item   TYPE tt_so_head_item,
+      mt_so_descriptive TYPE tt_so_descriptive
+    .
+    METHODS:
+      exclusion_first_idea,
+      exclusion_outer_join,
+      exclusion_association_standard,
+      case_on_proj_list,
+      union_all_alternative,
+      predecessor_and_successor
+    .
+ENDCLASS.
+
+
+
+CLASS zcl_sel_pattern_test_console IMPLEMENTATION.
+
+
+  METHOD if_oo_adt_classrun~main.
+    me->mo_out ?= out.
+
+    CLEAR:
+      me->mt_so_head_item[],
+      me->mt_so_descriptive[]
+    .
+
+    "me->exclusion_first_idea(  ).
+    "me->exclusion_outer_join(  ).
+    "me->exclusion_association_standard(  ).
+    "me->case_on_proj_list(  ).
+    "me->union_all_alternative(  ).
+    me->predecessor_and_successor(  ).
+  ENDMETHOD.
+
+  METHOD exclusion_first_idea.
+    SELECT
+      vbak~vbeln,
+      vbap~posnr,
+      vbap~matnr,
+      vbap~netwr,
+      vbap~waerk
+      FROM vbak
+      INNER JOIN vbap
+      ON vbap~vbeln = vbak~vbeln
+      WHERE vbak~auart = @cv_sd_order_type_ta
+        AND NOT EXISTS (
+          SELECT @abap_true FROM mara AS subq
+          WHERE subq~matnr = vbap~matnr
+            AND subq~lvorm = @abap_false
+            AND subq~mtart = @cv_material_type_hawa
+        )
+      ORDER BY
+      vbak~vbeln,
+      vbap~posnr
+      INTO CORRESPONDING FIELDS OF TABLE @me->mt_so_head_item[].
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( me->mt_so_head_item[] ) ).
+      me->mo_out->write(  me->mt_so_head_item[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD exclusion_outer_join.
+    SELECT
+      vbak~vbeln,
+      vbap~posnr,
+      vbap~matnr,
+      vbap~netwr,
+      vbap~waerk,
+      mara~mtart,
+      mara~xchpf
+      FROM vbak
+      INNER JOIN vbap
+      ON vbap~vbeln = vbak~vbeln
+      LEFT OUTER JOIN mara
+      ON  mara~matnr = vbap~matnr
+      AND mara~lvorm = @abap_false  "NOT in WHERE if OUTER join is expected
+      WHERE vbak~auart = @cv_sd_order_type_ta
+        AND (    mara~matnr IS NULL
+              OR mara~mtart <> @cv_material_type_hawa
+            )
+      ORDER BY
+      vbak~vbeln,
+      vbap~posnr
+      INTO CORRESPONDING FIELDS OF TABLE @me->mt_so_head_item[].
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( me->mt_so_head_item[] ) ).
+      me->mo_out->write(  me->mt_so_head_item[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD exclusion_association_standard.
+    SELECT
+      SalesOrder                                    AS vbeln,
+      so~\_Item-SalesOrderItem                      AS posnr,
+      so~\_Item-Product                             AS matnr,
+      so~\_Item-NetAmount                           AS netwr,
+      so~\_Item-TransactionCurrency                 AS waerk,
+      so~\_Item\_Product-ProductType                AS mtart,
+      so~\_Item\_Product-IsBatchManagementRequired  AS xchpf
+      FROM R_SalesOrderTP AS so
+      WHERE so~SalesOrderType = @cv_sd_order_type_ta
+        AND so~\_Item-SalesOrderItem IS NOT NULL
+        AND (    so~\_Item\_Product-ProductType IS NULL
+              OR (     so~\_Item\_Product-ProductType <> @cv_material_type_hawa
+                   AND so~\_Item\_Product-IsMarkedForDeletion = @abap_false
+                 )
+            )
+      ORDER BY vbeln, posnr
+      INTO TABLE @me->mt_so_head_item[].
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( me->mt_so_head_item[] ) ).
+      me->mo_out->write(  me->mt_so_head_item[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD case_on_proj_list.
+    SELECT
+      SalesDocument                                       AS vbeln,
+      so~\_ItemBasic-SalesDocumentItem                    AS posnr,
+      so~\_ItemBasic-Material                             AS matnr,
+      so~\_ItemBasic-NetAmount                            AS netwr,
+      so~\_ItemBasic-TransactionCurrency                  AS waerk,
+      so~\_ItemBasic\_Material-MaterialType               AS mtart,
+      so~\_ItemBasic\_Material-IsBatchManagementRequired  AS xchpf,
+      CASE
+        WHEN so~\_ItemBasic\_Material-IsBatchManagementRequired IS NULL
+        THEN 'Batch Managment is IRRELEVANT'
+        WHEN so~\_ItemBasic\_Material-IsBatchManagementRequired = @abap_true
+        THEN 'Batch Managment IS required'
+        ELSE 'Batch Managment is NOT required'
+      END AS IsBatchMgmtReq
+      FROM I_SalesDocumentBasic AS so
+      WHERE so~SalesDocumentType                        = @cv_sd_order_type_ta
+        AND so~\_ItemBasic-SalesDocumentItem           IS NOT NULL
+        AND (    so~\_ItemBasic\_Material-MaterialType <> @cv_material_type_hawa
+              OR so~\_ItemBasic\_Material-MaterialType IS NULL
+            )
+      ORDER BY vbeln, posnr
+      INTO TABLE @me->mt_so_descriptive[].
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( me->mt_so_descriptive[] ) ).
+      me->mo_out->write(  me->mt_so_descriptive[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD union_all_alternative.
+    SELECT
+      SalesDocument                                       AS vbeln,
+      so~\_ItemBasic-SalesDocumentItem                    AS posnr,
+      so~\_ItemBasic-Material                             AS matnr,
+      so~\_ItemBasic-NetAmount                            AS netwr,
+      so~\_ItemBasic-TransactionCurrency                  AS waerk,
+      so~\_ItemBasic\_Material-MaterialType               AS mtart,
+      so~\_ItemBasic\_Material-IsBatchManagementRequired  AS xchpf,
+      'Batch Managment is IRRELEVANT'                     AS IsBatchMgmtReq
+      FROM I_SalesDocumentBasic AS so
+      WHERE so~SalesDocumentType                        = @cv_sd_order_type_ta
+        AND so~\_ItemBasic-SalesDocumentItem           IS NOT NULL
+        AND (    so~\_ItemBasic\_Material-MaterialType <> @cv_material_type_hawa
+              OR so~\_ItemBasic\_Material-MaterialType IS NULL
+            )
+        AND so~\_ItemBasic\_Material-IsBatchManagementRequired IS NULL
+      UNION ALL
+      SELECT
+      SalesDocument                                       AS vbeln,
+      so~\_ItemBasic-SalesDocumentItem                    AS posnr,
+      so~\_ItemBasic-Material                             AS matnr,
+      so~\_ItemBasic-NetAmount                            AS netwr,
+      so~\_ItemBasic-TransactionCurrency                  AS waerk,
+      so~\_ItemBasic\_Material-MaterialType               AS mtart,
+      so~\_ItemBasic\_Material-IsBatchManagementRequired  AS xchpf,
+      'Batch Managment IS required'                       AS IsBatchMgmtReq
+      FROM I_SalesDocumentBasic AS so
+      WHERE so~SalesDocumentType                        = @cv_sd_order_type_ta
+        AND so~\_ItemBasic-SalesDocumentItem           IS NOT NULL
+        AND (    so~\_ItemBasic\_Material-MaterialType <> @cv_material_type_hawa
+              OR so~\_ItemBasic\_Material-MaterialType IS NULL
+            )
+        AND so~\_ItemBasic\_Material-IsBatchManagementRequired = @abap_true
+      UNION ALL
+      SELECT
+      SalesDocument                                       AS vbeln,
+      so~\_ItemBasic-SalesDocumentItem                    AS posnr,
+      so~\_ItemBasic-Material                             AS matnr,
+      so~\_ItemBasic-NetAmount                            AS netwr,
+      so~\_ItemBasic-TransactionCurrency                  AS waerk,
+      so~\_ItemBasic\_Material-MaterialType               AS mtart,
+      so~\_ItemBasic\_Material-IsBatchManagementRequired  AS xchpf,
+      'Batch Managment is NOT required'                   AS IsBatchMgmtReq
+      FROM I_SalesDocumentBasic AS so
+      WHERE so~SalesDocumentType                        = @cv_sd_order_type_ta
+        AND so~\_ItemBasic-SalesDocumentItem           IS NOT NULL
+        AND (    so~\_ItemBasic\_Material-MaterialType <> @cv_material_type_hawa
+              OR so~\_ItemBasic\_Material-MaterialType IS NULL
+            )
+        AND so~\_ItemBasic\_Material-IsBatchManagementRequired = @abap_false
+      ORDER BY vbeln, posnr
+      INTO TABLE @me->mt_so_descriptive[].
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( me->mt_so_descriptive[] ) ).
+      me->mo_out->write(  me->mt_so_descriptive[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD predecessor_and_successor.
+    SELECT
+      objectid, tabkey, changenr, chngind,
+      username, changed_on, value_old, value_new,
+      pred_username, pred_changed_on, pred_value_old, pred_value_new
+      FROM z_f_cd_pair( iv_objclass = 'VERKBELEG', iv_tabname = 'VBAP', iv_fldname = 'MATNR' )
+      ORDER BY changed_on DESCENDING
+      INTO TABLE @DATA(lt_cd).
+    IF sy-subrc IS INITIAL.
+      me->mo_out->write(  lines( lt_cd[] ) ).
+      me->mo_out->write(  lt_cd[] ).
+    ELSE.
+      me->mo_out->write( 'Nothing selected' ).
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
