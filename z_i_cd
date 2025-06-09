@@ -1,0 +1,35 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Change documents'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+  serviceQuality: #X,
+  sizeCategory: #S,
+  dataClass: #MIXED
+}
+define view entity Z_I_CD 
+with parameters
+  iv_objclass : cdobjectcl,
+  iv_tabname  : tabname,
+  iv_fldname  : fieldname
+as select from cdhdr as hdr
+inner join cdpos as pos
+on  pos.objectid = hdr.objectid
+and pos.changenr = hdr.changenr
+{
+  key hdr.objectid,
+  key hdr.changenr,
+  key pos.tabkey,
+  key pos.chngind,
+      hdr.username,
+      concat(hdr.udate, hdr.utime) as changed_on,
+      pos.unit_old,
+      pos.unit_new,
+      pos.cuky_old,
+      pos.cuky_new,
+      pos.value_old,
+      pos.value_new
+}
+where hdr.objectclas = $parameters.iv_objclass
+  and pos.tabname    = $parameters.iv_tabname
+  and pos.fname      = $parameters.iv_fldname
