@@ -1,0 +1,15 @@
+@EndUserText.label: 'Any TOA0x table'
+define table function Z_F_TOAX
+with parameters iv_table_name : tabname16
+returns {
+  mandt         : abap.clnt;
+  sap_object    : saeanwdid;
+  object_id     : saeobjid;
+  archiv_id     : saearchivi;
+  arc_doc_id    : saeardoid;
+  ar_object     : saeobjart;
+  ar_date       : saeabadate;
+  del_date      : saedeldate;
+  reserve       : saereserve;
+}
+implemented by method zcl_amdp_sel_pattern=>read_toax;
