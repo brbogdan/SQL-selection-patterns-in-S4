@@ -1,0 +1,94 @@
+CLASS zcl_amdp_sel_pattern DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+    INTERFACES : if_amdp_marker_hdb.
+
+    CLASS-METHODS:
+      read_cd_pair FOR TABLE FUNCTION z_f_cd_pair,
+      read_toax    FOR TABLE FUNCTION z_f_toax
+       .
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zcl_amdp_sel_pattern IMPLEMENTATION.
+  METHOD read_cd_pair
+    BY DATABASE FUNCTION
+    FOR HDB LANGUAGE SQLSCRIPT
+    OPTIONS READ-ONLY
+    USING
+    z_i_cd
+    .
+    lt_result =
+      select
+        cd.mandt,
+        cd.objectid,
+        cd.tabkey,
+        cd.changenr,
+        cd.chngind,
+        cd.username,
+        cd.changed_on,
+        cd.unit_old,
+        cd.unit_new,
+        cd.cuky_old,
+        cd.cuky_new,
+        cd.value_old,
+        cd.value_new,
+        pred.username as pred_username,
+        pred.changed_on as pred_changed_on,
+        pred.unit_old as pred_unit_old,
+        pred.unit_new as pred_unit_new,
+        pred.cuky_old as pred_cuky_old,
+        pred.cuky_new as pred_cuky_new,
+        pred.value_old as pred_value_old,
+        pred.value_new pred_value_new
+      from z_i_cd(
+        iv_objclass => :iv_objclass,
+        iv_tabname  => :iv_tabname,
+        iv_fldname  => :iv_fldname
+      ) as cd
+      left outer join z_i_cd(
+        iv_objclass => :iv_objclass,
+        iv_tabname  => :iv_tabname,
+        iv_fldname  => :iv_fldname
+      ) as pred
+      on  pred.mandt    = cd.mandt
+      and pred.objectid = cd.objectid
+      and pred.tabkey   = cd.tabkey
+      and pred.changed_on = (
+        select MAX( cdlast.changed_on )
+          from z_i_cd(
+          iv_objclass => :iv_objclass,
+          iv_tabname  => :iv_tabname,
+          iv_fldname  => :iv_fldname
+          ) as cdlast
+          where cdlast.objectid   = cd.objectid
+          and   cdlast.tabkey     = cd.tabkey
+          and   cdlast.changed_on < cd.changed_on
+      );
+    RETURN :lt_result;
+  ENDMETHOD.
+
+  METHOD read_toax
+    BY DATABASE FUNCTION
+    FOR HDB LANGUAGE SQLSCRIPT
+    OPTIONS READ-ONLY
+    USING toa01.
+
+    DECLARE lv_query STRING;
+    DECLARE lt_result TABLE LIKE toa01;
+
+    lv_query = 'SELECT * FROM ' || :iv_table_name;
+
+    EXECUTE IMMEDIATE lv_query INTO lt_result;
+
+    RETURN :lt_result;
+
+  ENDMETHOD.
+ENDCLASS.
