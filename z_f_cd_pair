@@ -1,0 +1,37 @@
+@EndUserText.label: 'Change documents: predeccessor and successor'
+@ClientHandling.type: #CLIENT_DEPENDENT
+@ClientHandling.algorithm: #SESSION_VARIABLE
+define table function Z_F_CD_PAIR
+with parameters
+  @Environment.systemField: #CLIENT
+  iv_mandt    : abap.clnt,
+  iv_objclass : cdobjectcl,
+  iv_tabname  : tabname,
+  iv_fldname  : fieldname
+returns {
+  key mandt      : mandt;
+  key objectid   : cdobjectv;
+  key tabkey     : cdtabkey;
+  key changenr   : cdchangenr;
+  key chngind    : cdchngind;
+      --succesor:
+      username   : cdusername;
+      changed_on : rsbtimestamp;
+      unit_old   : cdunit;
+      unit_new   : cdunit;
+      cuky_old   : cdcuky;
+      cuky_new   : cdcuky;
+      value_old  : cdfldvalo;
+      value_new  : cdfldvaln;
+      
+      --predecessor:
+      pred_username   : cdusername;
+      pred_changed_on : rsbtimestamp;
+      pred_unit_old   : cdunit;
+      pred_unit_new   : cdunit;
+      pred_cuky_old   : cdcuky;
+      pred_cuky_new   : cdcuky;
+      pred_value_old  : cdfldvalo;
+      pred_value_new  : cdfldvaln;  
+}
+implemented by method zcl_amdp_sel_pattern=>read_cd_pair;
